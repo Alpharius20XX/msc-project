@@ -1,4 +1,4 @@
-name: TIDE_5M_100_32trk_F32
+name: TIDE_32trk_F32
 
 data:
   batch_size: 100
@@ -13,9 +13,9 @@ data:
   val_dir: /home/xzcappon/shared/for-max/ambi/val
   test_dir: /home/xzcappon/shared/for-max/ambi/test
   
-  num_workers: 0 #8 #14
+  num_workers: 14
   
-  num_train: 100000 #0 
+  num_train: 1000000 
   num_test: 10000
   num_val: 10000
   
@@ -37,7 +37,7 @@ data:
     sct: 4
 
   # Maximum number of tracks allowed in an ROI before we drop the ROI
-  roi_max_num_tracks: &num_tracks 40
+  roi_max_num_tracks: &num_tracks 32
 
   # The maximum number of tracks that can be dropped from track
   # cuts before we drop the entire ROI
@@ -144,14 +144,15 @@ data:
       - d0
       - q
       - qopt
-      # Track paramaters in ROI frame
-      - deta
-      - dphi
-      - dz0
       # Vertex location in global frame
       - vx
       - vy
       - vz
+      # Track paramaters in ROI frame
+      - dtheta
+      - deta
+      - dphi
+      - dz0
       # Scaled fields for the regression
       - scaled_dz0
       - scaled_d0
@@ -186,6 +187,7 @@ data:
       - q
       - qopt
       # Track paramaters in ROI frame
+      - dtheta
       - deta
       - dphi
       - dz0
@@ -205,6 +207,7 @@ data:
       - q
       - qopt
       # Track paramaters in ROI frame
+      - dtheta
       - deta
       - dphi
       - dz0
@@ -297,6 +300,7 @@ model:
       input_sort_field: phi
       use_attn_masks: true
       use_query_masks: false
+      target_object: sudo
 
       input_nets:
         class_path: torch.nn.ModuleList
@@ -413,13 +417,11 @@ model:
       encoder:
         class_path: hepattn.models.Encoder
         init_args:
-          num_layers: 8
+          num_layers: 4
           dim: *dim
           attn_type: torch
-          # window_size: 1024
-          # window_wrap: false
 
-      num_decoder_layers: 8
+      num_decoder_layers: 4
       decoder_layer_config:
         dim: *dim
         mask_attention: true
@@ -444,7 +446,7 @@ model:
                 losses:
                   object_bce: 1.0
                 costs:
-                  object_bce: 100.0
+                  object_bce: 10.0
                 dim: *dim
                 null_weight: 1.0
                 mask_queries: false
@@ -457,9 +459,9 @@ model:
                 output_object: pred
                 target_object: sudo
                 losses:
-                  mask_bce: 100.0
+                  mask_bce: 10.0
                 costs:
-                  mask_bce: 100.0
+                  mask_bce: 10.0
                 dim: *dim
                 null_weight: 1.0
 
@@ -471,9 +473,8 @@ model:
                 output_object: pred
                 target_object: sudo
                 losses:
-                  mask_bce: 50.0
+                  mask_bce: 5.0
                 costs:
-                  mask_bce: 50.0
+                  mask_bce: 5.0
                 dim: *dim
                 null_weight: 1.0
-

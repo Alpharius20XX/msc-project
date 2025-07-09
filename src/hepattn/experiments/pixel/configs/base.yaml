@@ -1,16 +1,18 @@
-name: pixel_mini
+name: pixel_enriched_noclass
 
 data:
-  train_dir: /share/rcifdata/maxhart/data/pixsplit/mc23_prepped/new/
-  val_dir: /share/rcifdata/maxhart/data/pixsplit/mc23_prepped/new/
-  test_dir: /share/rcifdata/maxhart/data/pixsplit/mc23_prepped/new/
+  train_dir: /share/rcifdata/maxhart/data/pixsplit/mc23_prepped_enriched/train/
+  val_dir: /share/rcifdata/maxhart/data/pixsplit/mc23_prepped_enriched/val/
+  test_dir: /share/rcifdata/maxhart/data/pixsplit/mc23_prepped_enriched/test/
 
   num_train: 1000000
   num_val: 10000
   num_test: 10000
 
+  # Number of threads to use for the dataloader
   num_workers: 8
 
+  # Number of clusters per batch
   batch_size: 100
 
   # If specified only clusters with these multiplicities will be given
@@ -18,14 +20,13 @@ data:
 
   # If specified, clusters with this multiplicity are retained at the spcified rate
   cluster_multiplicity_subsample_frac:
-    1: 0.25 # Retain 1-particle clusters 65% of the time
 
   # Maximum x / y for a particle to be marked as a valid target
   particle_max_x: 8
   particle_max_y: 8
 
   # Whether to consider particles without a barcode as valid or not
-  particle_allow_notruth: false
+  particle_allow_notruth: true
 
   # Whether to consider secondary particles as valid or not
   particle_allow_secondary: true
@@ -41,16 +42,16 @@ data:
   cluster_max_multiplicity: &cluster_max_multiplicity 8
 
   # The maximum x/y width in pixels of a cluster for it to not be dropped
-  cluster_max_width_x: 32
-  cluster_max_width_y: 32
+  cluster_max_width_x: 16
+  cluster_max_width_y: 16
 
   # The maximum absolute global eta of a cluster for it to not be dropped
-  cluster_max_abs_eta: 2.5
+  cluster_max_abs_eta: 2.8
   
   # If set to true, clusters containing a notruth particle will be dropped
-  cluster_allow_notruth_particle: false
+  cluster_allow_notruth_particle: true
 
-  # If set to true, clusters containing any particle that did not pass the particle selection are dropped
+  # If set to false, clusters containing any particle that did not pass the particle selection are dropped
   cluster_allow_dropped_particle: false  
 
   inputs:
@@ -94,6 +95,7 @@ data:
       - secondary
       - notruth
       - pdgid
+      - class_label
     
     cluster:
       - multiplicity
@@ -155,7 +157,7 @@ model:
   model:
     class_path: hepattn.models.MaskFormer
     init_args:
-      dim: &dim 64
+      dim: &dim 128
       num_queries: *cluster_max_multiplicity
       input_sort_field: x
       use_attn_masks: false
@@ -237,6 +239,27 @@ model:
                 fields:
                   - x
                   - y
+                  # - theta
+                  # - phi
                 loss_weight: 1.0
                 cost_weight: 1.0
                 dim: *dim
+
+            # - class_path: hepattn.models.task.ClassificationTask
+            #   init_args:
+            #     name: track_class
+            #     input_object: query
+            #     output_object: track
+            #     target_object: particle
+            #     classes:
+            #       - primary
+            #       - secondary
+            #       - notruth
+            #     class_weights:
+            #       primary: 1.00
+            #       secondary: 8.68
+            #       notruth: 2.04
+            #     loss_weight: 0.1
+            #     dim: *dim
+
+

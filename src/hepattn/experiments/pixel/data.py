@@ -5,10 +5,29 @@ import h5py
 import numpy as np
 import torch
 from lightning import LightningDataModule
+from particle.pdgid import is_hadron
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
 from hepattn.utils.tensor_utils import pad_to_size
+
+# Necessary to stop this
+# https://discuss.pytorch.org/t/runtimeerror-received-0-items-of-ancdata/4999/2
+torch.multiprocessing.set_sharing_strategy("file_system")
+
+
+def pdgid_to_class(pdgid):
+    if np.abs(pdgid) == 11:
+        return "electron"
+    if np.abs(pdgid) == 13:
+        return "muon"
+    if np.abs(pdgid) == 15:
+        return "tau"
+    if pdgid == 22:
+        return "photon"
+    if is_hadron(pdgid):
+        return "hadron"
+    return "other"
 
 
 class PixelClusterDataset(Dataset):
@@ -221,7 +240,7 @@ class PixelClusterDataset(Dataset):
                 x[f"cluster_global_{coord}"] = file[f"cluster_global_{coord}"][idx]
 
             x["cluster_global_r"] = np.sqrt(x["cluster_global_x"] ** 2 + x["cluster_global_x"] ** 2)
-            x["cluster_global_s"] = np.sqrt(x["cluster_global_x"] ** 2 + x["cluster_global_x"] ** 2 + x["cluster_global_z"] ** 2)
+            x["cluster_global_s"] = np.sqrt(x["cluster_global_x"] ** 2 + x["cluster_global_y"] ** 2 + x["cluster_global_z"] ** 2)
 
             with np.errstate(divide="ignore", invalid="ignore"):
                 x["cluster_global_theta"] = np.arccos(x["cluster_global_z"] / x["cluster_global_s"])
@@ -251,8 +270,8 @@ class PixelClusterDataset(Dataset):
             x["pixel_x"] = x["pixel_phi_index"] - file["cluster_weighted_phi_index"][idx]
 
             # Calculate the width of the cluster in x and y
-            x["cluster_width_x"] = np.max(x["pixel_x"]) - np.min(x["pixel_x"])
-            x["cluster_width_y"] = np.max(x["pixel_y"]) - np.min(x["pixel_y"])
+            x["cluster_width_x"] = np.max(x["pixel_x"]) - np.min(x["pixel_x"]) + 1
+            x["cluster_width_y"] = np.max(x["pixel_y"]) - np.min(x["pixel_y"]) + 1
 
             # Apply cluster width cuts
             if x["cluster_width_x"] > self.cluster_max_width_x:
@@ -328,6 +347,18 @@ class PixelClusterDataset(Dataset):
             if np.sum(x["particle_valid"]) > self.cluster_max_multiplicity:
                 return None
 
+            # Add the particle class labels
+            particle_class_name_to_label = {
+                "hadron": 1,
+                "photon": 2,
+                "electron": 3,
+                "muon": 4,
+                "tau": 5,
+                "other": 6,
+            }
+            x["particle_class_name"] = [pdgid_to_class(pdgid) for pdgid in x["particle_pdgid"]]
+            x["particle_class_label"] = np.array([particle_class_name_to_label[class_name] for class_name in x["particle_class_name"]])
+
             ########################################################################
             # Now return the particle fields
             ########################################################################
@@ -343,6 +374,7 @@ class PixelClusterDataset(Dataset):
                 "secondary",
                 "notruth",
                 "pdgid",
+                "class_label",
             ]
 
             for field in particle_fields:
