@@ -2,13 +2,26 @@ name: TIDE_5M_100_32trk_F32
 
 data:
   batch_size: 100
-  train_dir: data/tide/prepped/
-  val_dir: data/tide/prepped/
-  test_dir: data/tide/prepped/
-  num_workers: 14
-  num_train: 1000000
+  #train_dir: data/tide/prepped/
+  #val_dir: data/tide/prepped/
+  #test_dir: data/tide/prepped/
+  
+
+
+  train_dir: /home/xzcappon/shared/for-max/ambi/train
+
+  val_dir: /home/xzcappon/shared/for-max/ambi/val
+  test_dir: /home/xzcappon/shared/for-max/ambi/test
+  
+  num_workers: 0 #8 #14
+  
+  num_train: 100000 #0 
   num_test: 10000
   num_val: 10000
+  
+  #num_train: 100000
+  #num_test: 10000
+  #num_val: 10000
   precision: single
 
   # Minimum track pT in GeV
@@ -235,8 +248,8 @@ trainer:
   gradient_clip_val: 0.1
   accumulate_grad_batches: 1
   enable_progress_bar: True
-  val_check_interval: 1000
-
+  val_check_interval: 10 
+  #1000
   # Specify loggers here
   logger:
     class_path: lightning.pytorch.loggers.CometLogger
@@ -245,7 +258,7 @@ trainer:
 
   # Specify any callback here
   callbacks:
-    - class_path: hepattn.callbacks.Metadata
+    - class_path: hepattn.callbacks.SaveConfig
     - class_path: hepattn.callbacks.Checkpoint
       init_args:
         monitor: train/loss
@@ -464,32 +477,3 @@ model:
                 dim: *dim
                 null_weight: 1.0
 
-            - class_path: hepattn.models.task.ObjectRegressionTask
-              init_args:
-                name: pred_regression
-                input_object: query
-                output_object: pred
-                target_object: sudo
-                dim: *dim
-                loss_weight: 10.0
-                fields:
-                  - scaled_qopt
-                  - scaled_dtheta
-                  - scaled_dphi
-                  - scaled_d0
-                  - scaled_dz0
-
-            - class_path: hepattn.models.task.ObjectHitRegressionTask
-              init_args:
-                name: pred_pix_regression
-                input_hit: pix
-                input_object: query
-                output_object: pred_pix
-                target_object: sudo_pix
-                dim: *dim
-                loss_weight: 10.0
-                fields:
-                  - loc_x
-                  - loc_y
-                  - theta
-                  - phi

@@ -3,7 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 
-from hepattn.models.posenc import FourierPositionEncoder, PositionEncoder, pos_enc, pos_enc_symmetric
+from hepattn.models.posenc import FourierPositionEncoder, PositionEncoder, pos_enc, pos_enc_symmetric,RoPE
 
 
 def test_pos_enc():
@@ -58,3 +58,48 @@ def test_pos_enc_random():
     xs = {"test_x": x, "test_y": y, "test_z": z}
     embedding = pe(xs)
     assert embedding.shape == (10, 100, 128)
+
+def test_rope():
+    """Test the RoPE implementation."""
+    dim = 128
+    rope = RoPE(dim=dim)
+    x = torch.randn(1, 10, dim)  # (batch_size, seq_len, dim)
+    output = rope(x)
+    assert output.shape == x.shape
+
+def test_rope_visualization():
+    """Generate visualizations for RoPE."""
+    dim = 128
+    out_dir = Path("tests/outputs/rope")
+    out_dir.mkdir(exist_ok=True, parents=True)
+
+    rope = RoPE(dim=dim)
+    
+    # Create an identity matrix to represent untransformed vectors at each position
+    # This helps visualize what RoPE does to a set of orthogonal base vectors
+    x = torch.eye(dim) 
+    
+    # Apply RoPE. Unsqueeze to add a batch dimension, then squeeze to remove it.
+    rope_output = rope(x.unsqueeze(0)).squeeze(0)
+
+    # 1. Visualize the RoPE transformation itself
+    plt.figure()
+    plt.imshow(rope_output.detach().numpy(), aspect="auto")
+    plt.title("RoPE Transformation")
+    plt.xlabel("Embedding Dimension")
+    plt.ylabel("Sequence Position")
+    plt.colorbar()
+    plt.savefig(out_dir / "rope.png")
+    plt.close()
+
+    # 2. Visualize the similarity matrix
+    # This shows the dot product between position embeddings, highlighting relative positions
+    sim = rope_output @ rope_output.T
+    plt.figure()
+    plt.imshow(sim.detach().numpy(), aspect="auto")
+    plt.title("RoPE Similarity Matrix")
+    plt.xlabel("Sequence Position")
+    plt.ylabel("Sequence Position")
+    plt.colorbar()
+    plt.savefig(out_dir / "sim.png")
+    plt.close()

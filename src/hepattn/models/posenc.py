@@ -135,3 +135,47 @@ class FourierPositionEncoder(nn.Module):
         xs = 2 * self.pi * xs
         xs @= self.B
         return torch.cat([torch.sin(xs), torch.cos(xs)], dim=-1)
+
+#####
+class RoPE(nn.Module):
+    """
+    An implementation of Rotary Position Embedding (RoPE).
+
+    "RoFormer: Enhanced Transformer with Rotary Position Embedding"
+    see https://arxiv.org/abs/2104.09864
+    """
+
+    def __init__(self, dim: int, base: float = 10000.0):
+        super().__init__()
+        self.dim = dim
+        self.base = base
+        self.inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float() / self.dim))
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Apply RoPE to the input tensor.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (..., seq_len, dim)
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor with RoPE applied.
+        """
+        t = torch.arange(x.shape[-2], device=x.device, dtype=self.inv_freq.dtype)
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+        emb = torch.cat((freqs, freqs), dim=-1)
+
+        # Reshape for broadcasting
+        while len(emb.shape) < len(x.shape):
+            emb = emb.unsqueeze(0)
+
+        x_cos = emb.cos()
+        x_sin = emb.sin()
+
+        # Rotate the even and odd dimensions
+        x_rotated = torch.cat([-x[..., 1::2], x[..., ::2]], dim=-1)
+        return x * x_cos + x_rotated * x_sin
