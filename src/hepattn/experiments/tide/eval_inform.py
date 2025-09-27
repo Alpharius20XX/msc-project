@@ -18,10 +18,22 @@ def sigmoid(x):
 
 
 def main():
-    eval_path = Path("/home/xucabeeh/maxnewcopy/hepattn/logs/rope_sep/ckpts/epoch=004-train_loss=1.11565_test_eval.h5")
 
-    folder = "rope_sep"
-    file_name = "epoch=004-train_loss=1.11565_test_eval.h5"
+    
+    folder="/rope4d"
+    file="/epoch=005-train_loss=0.97230_test_eval.h5"
+
+    #/home/xucabeeh/maxnewcopy/hepattn/logs/big_posenc_rad/ckpts/epoch=003-train_loss=0.97229.ckpt
+    #maxnewcopy/hepattn/logs/TIDE_32trk_F32_20250909-T134857/ckpts/epoch=009-train_loss=3.11655.ckpt
+
+    # The base directory path
+    base_dir="/home/xucabeeh/maxnewcopy/hepattn/logs"
+
+    eval_path=Path(base_dir+folder+"/ckpts"+file)
+
+    #eval_path = Path("/home/xucabeeh/maxnewcopy/hepattn/logs/TIDE_32trk_F32_20250909-T221555/ckpts/epoch=003-train_loss=1.69316_test_eval.h5")
+
+    
 
     pred_names = ["sudo", "sisp", "reco", "pred"]
     colors = {
@@ -39,6 +51,9 @@ def main():
 
     trk_all_bins = {pred_name: {qty: np.zeros(len(bins) - 1) for qty, _, _, bins in trk_qtys} for pred_name in pred_names}
     trk_eff_bins = {pred_name: {qty: np.zeros(len(bins) - 1) for qty, _, _, bins in trk_qtys} for pred_name in pred_names}
+
+    total_tracks = {pred_name: 0 for pred_name in pred_names}
+    efficient_tracks = {pred_name: 0 for pred_name in pred_names}
 
     with h5py.File(eval_path) as file:
         for i, sample_id in tqdm(enumerate(file.keys())):
@@ -97,6 +112,10 @@ def main():
 
                 true_is_eff = (scores >= score_threshold).any(-1)[true_valid]
 
+                efficient_tracks[pred_name] += np.sum(true_is_eff)
+                    # Add the total number of true tracks from this sample.
+                total_tracks[pred_name] += num_true_in_sample
+
                 for qty_name, _, _, bins in trk_qtys:
                     qty = targets[qty_name][0][true_valid]
 
@@ -105,6 +124,18 @@ def main():
 
                     trk_all_bins[pred_name][qty_name] += num_all
                     trk_eff_bins[pred_name][qty_name] += num_eff
+
+    print("\n" + "="*50)
+    print(f"Overall Tracking Efficiencies for {Path(eval_path).name}:")
+    for pred_name in pred_names:
+        total = total_tracks[pred_name]
+        efficient = efficient_tracks[pred_name]
+        if total > 0:
+            overall_eff = (efficient / total)
+            print(f"  - {pred_name.capitalize():<5}: {overall_eff:.4f} ({efficient}/{total})")
+        else:
+            print(f"  - {pred_name.capitalize():<5}: N/A (0 total tracks)")
+    print("="*50 + "\n")
 
     for qty_name, qty_label, scale, bins in trk_qtys:
         fig, ax = plt.subplots()
@@ -129,8 +160,7 @@ def main():
         ax.set_ylabel("Track Efficiency")
 
         fig.tight_layout()
-        fig.savefig(f"/home/xucabeeh/maxnewcopy/hepattn/src/hepattn/experiments/tide/plots/{qty_name}.png")
-
+        fig.savefig(f"/home/xucabeeh/maxnewcopy/hepattn/src/hepattn/experiments/tide/plots/{folder}{file}{qty_name}.png")
 
 if __name__ == "__main__":
     main()

@@ -1,17 +1,27 @@
 name: TIDE_32trk_F32
-#Sophia run
+
 data:
   batch_size: 100
+  #train_dir: data/tide/prepped/
+  #val_dir: data/tide/prepped/
+  #test_dir: data/tide/prepped/
   
+
+
   train_dir: /home/xzcappon/shared/for-max/ambi/train
 
   val_dir: /home/xzcappon/shared/for-max/ambi/val
   test_dir: /home/xzcappon/shared/for-max/ambi/test
-
-  num_workers: 10
-  num_train: 1000000
+  
+  num_workers: 14
+  
+  num_train: 100000 
   num_test: 10000
   num_val: 10000
+  
+  #num_train: 100000
+  #num_test: 10000
+  #num_val: 10000
   precision: single
 
   # Minimum track pT in GeV
@@ -31,7 +41,7 @@ data:
 
   # The maximum number of tracks that can be dropped from track
   # cuts before we drop the entire ROI
-  roi_max_num_dropped_tracks: 0 #100
+  roi_max_num_dropped_tracks: 0
 
   inputs:
     pix:
@@ -232,9 +242,22 @@ data:
 
     reco_pix: []
 
+
+
+
+
+
     reco_sct: []
 
+
+
+
+
     sisp_pix: []
+
+
+
+
 
     sisp_sct: []
 
@@ -251,12 +274,13 @@ trainer:
   gradient_clip_val: 0.1
   accumulate_grad_batches: 1
   enable_progress_bar: True
-  val_check_interval: 1000
-
+  val_check_interval: 10 
+  #1000
+  # Specify loggers here
   logger:
-    class_path: hepattn.utils.loggers.MyCometLogger
+    class_path: lightning.pytorch.loggers.CometLogger
     init_args:
-      project: tide
+      project_name: tide
 
   # Specify any callback here
   callbacks:
@@ -268,9 +292,9 @@ trainer:
     - class_path: hepattn.callbacks.PredictionWriter
       init_args:
         write_inputs: false
-        write_outputs: true
+        write_outputs: true #false
         write_preds: true
-        write_targets: true
+        write_targets: true  #false
         write_losses: false
     - class_path: lightning.pytorch.callbacks.ModelSummary
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
@@ -295,7 +319,10 @@ model:
     class_path: hepattn.models.MaskFormer
     init_args:
       dim: &dim 256
+      num_queries: *num_tracks
       input_sort_field: phi
+      use_attn_masks: true
+      use_query_masks: false
       target_object: sudo
 
       input_nets:
@@ -345,17 +372,17 @@ model:
                     input_size: 81
                     output_size: *dim
                 posenc:
-                  class_path: hepattn.models.posenc.FourierPositionEncoder
+                  class_path: hepattn.models.posenc.RopeEncoderSep #RopeEncoder4D #hepattn.models.posenc.PositionEncoder #
                   init_args:
                     input_name: pix
-                    dim: *dim
                     fields:
-                      #- x
-                      #- y
-                      #- z
+                      #- x #
+                      #- y #
+                      #- z #
                       - r
                       - dtheta
                       - dphi
+
 
             - class_path: hepattn.models.InputNet
               init_args:
@@ -398,32 +425,29 @@ model:
                     input_size: 25
                     output_size: *dim
                 posenc:
-                  class_path: hepattn.models.posenc.FourierPositionEncoder
+                  class_path: hepattn.models.posenc.RopeEncoderSep #RopeEncoder4D #hepattn.models.posenc.PositionEncoder #hepattn.models.posenc.FourierPositionEncoder #remember different inputs for rope
                   init_args:
                     input_name: sct
-                    dim: *dim
                     fields:
-                      #- x
-                      #- y
-                      #- z
+                      #- x 
+                      #- y 
+                      #- z 
                       - r
                       - dtheta
                       - dphi
 
+
       encoder:
         class_path: hepattn.models.Encoder
         init_args:
-          num_layers: 8
+          num_layers: 4
           dim: *dim
           attn_type: torch
 
-      decoder:
-        num_decoder_layers: 8
-        num_queries: *num_tracks
+      num_decoder_layers: 4
+      decoder_layer_config:
+        dim: *dim
         mask_attention: true
-        use_query_masks: false
-        decoder_layer_config:
-          dim: *dim
 
       matcher:
         class_path: hepattn.models.matcher.Matcher
@@ -443,8 +467,8 @@ model:
                 output_object: pred
                 target_object: sudo
                 losses:
-                  object_bce: 0.01
-                costs:
+                  object_bce: 1.0
+                costs: 
                   object_bce: 10.0
                 dim: *dim
                 null_weight: 1.0
@@ -453,7 +477,7 @@ model:
             - class_path: hepattn.models.task.ObjectHitMaskTask
               init_args:
                 name: pred_pix_assignment
-                input_constituent: pix
+                input_hit: pix
                 input_object: query
                 output_object: pred
                 target_object: sudo
@@ -467,7 +491,7 @@ model:
             - class_path: hepattn.models.task.ObjectHitMaskTask
               init_args:
                 name: pred_sct_assignment
-                input_constituent: sct
+                input_hit: sct
                 input_object: query
                 output_object: pred
                 target_object: sudo

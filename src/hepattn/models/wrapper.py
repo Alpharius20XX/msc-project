@@ -9,6 +9,12 @@ from torchjd import mtl_backward
 from torchjd.aggregation import UPGrad
 
 
+
+#from sophia import SophiaG
+
+#from adan_pytorch import Adan
+
+
 class ModelWrapper(LightningModule):
     def __init__(
         self,
@@ -42,7 +48,7 @@ class ModelWrapper(LightningModule):
     def predict(self, outputs: dict[str, Tensor]) -> dict[str, Tensor]:
         return self.model.predict(outputs)
 
-    def aggregate_losses(self, losses: dict[str, Tensor], stage: str | None = None) -> Tensor:
+    """def aggregate_losses(self, losses: dict[str, Tensor], stage: str | None = None) -> Tensor:
         total_loss = 0
 
         for layer_name, layer_losses in losses.items():
@@ -54,9 +60,48 @@ class ModelWrapper(LightningModule):
             # Log the total loss from the layer
             self.log(f"{stage}/{layer_name}_loss", layer_loss, sync_dist=True)
 
+        
+
+        # Log the total loss
+        self.log(f"{stage}/loss", total_loss, sync_dist=True)
+        return total_loss"""
+
+
+    def aggregate_losses(self, losses, stage):
+        total_loss = 0
+
+        # Log the losses from each task from each layer
+        for layer_name, layer_losses in losses.items():
+            layer_loss = 1
+            for task_name, task_losses in layer_losses.items():
+                for loss_name, loss_value in task_losses.items():
+                    #self.log(f"{stage}/{layer_name}_{task_name}_{loss_name}", loss_value, sync_dist=True)
+                    layer_loss = layer_loss*loss_value
+
+            self.log(f"{stage}/{layer_name}_loss", layer_loss, sync_dist=True)
+            total_loss +=layer_loss
+
         # Log the total loss
         self.log(f"{stage}/loss", total_loss, sync_dist=True)
         return total_loss
+    
+    """def aggregate_losses(self, losses: dict[str, Tensor], stage: str | None = None) -> Tensor:
+        total_loss = 0
+
+        for layer_name, layer_losses in losses.items():
+            layer_loss = 0
+            for task_losses in layer_losses.values():
+                for loss_value in task_losses.values():
+                    total_loss += torch.log(loss_value+1e-8)
+
+            # Log the total loss from the layer
+            self.log(f"{stage}/{layer_name}_loss", layer_loss, sync_dist=True)
+
+        
+
+        # Log the total loss
+        self.log(f"{stage}/loss", total_loss, sync_dist=True)
+        return total_loss"""
 
     def log_task_metrics(self, preds: dict[str, Tensor], targets: dict[str, Tensor], stage: str) -> None:
         # Log any task specific metrics
@@ -146,6 +191,17 @@ class ModelWrapper(LightningModule):
             raise ValueError(f"Unknown optimizer: {self.opt_config['opt']}")
 
         opt = optimizer(self.model.parameters(), lr=self.lrs_config["initial"], weight_decay=self.lrs_config["weight_decay"])
+        
+        #opt = Adan(self.model.parameters(), lr=self.lrs_config["initial"], weight_decay=self.lrs_config["weight_decay"])
+
+
+        """opt = SophiaG(
+            self.model.parameters(),
+            lr=self.lrs_config["initial"],
+            weight_decay=self.lrs_config["weight_decay"],
+            betas=(0.965, 0.99), 
+            rho=0.04,
+        )"""
 
         if not self.lrs_config.get("skip_scheduler"):
             # Configure the learning rate scheduler
@@ -164,6 +220,9 @@ class ModelWrapper(LightningModule):
         return opt
 
     def mlt_opt(self, losses: dict[str, Tensor], outputs: dict[str, Tensor]) -> None:
+
+        #this should surely be mtl_opt?
+
         opt = self.optimizers()
         opt.zero_grad()
 
