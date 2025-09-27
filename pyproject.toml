@@ -1,0 +1,91 @@
+[project]
+authors = [{name = "Sam Van Stroud", email = "sam.van.stroud@cern.ch"}]
+description = "Attention for High Energy Physics"
+license = { text = "MIT" }
+readme = "README.md"
+name = "hepattn"
+requires-python = "== 3.12"
+version = "0.1.0"
+dependencies = [
+    "packaging",
+    "wheel",
+    "numpy",
+    "scipy",
+    "pytest>=8.3.3,<9",
+    "pytest-repeat",
+    "ruff==0.8.0",
+    "pre-commit>=4.0.1,<5",
+    "matplotlib==3.9.*",
+    "lightning==2.5.0.post0",
+    "comet-ml>=3.47.3,<4",
+    "pandas>=2.2.3,<3",
+    "pyarrow>=17.0.0",
+    "jsonargparse[signatures]>=4.34.0,<5",
+    "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp312-cp312-linux_x86_64.whl",
+    "torchjd>=0.5.0",
+    "lion-pytorch>=0.2.3,<0.3",
+    "awkward>=2.8.1",
+    "uproot>=5.6.0",
+    "h5py>=3.13.0",
+    "particle>=0.25.3",
+    "scikit-learn>=1.6.1,<2",
+    "numba>=0.61.2",
+    "onnx>=1.18.0",
+    "onnxruntime>=1.22.0", "sophia-optimizer>=0.2.5,<0.3", "adan-pytorch>=0.1.0,<0.2",
+]
+
+[build-system]
+requires = ["scikit-build-core>=0.3.3", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+wheel.packages = ["src/hepattn", "src/lap1015/src/lap1015"]
+
+[tool.pixi.project]
+channels = ["nvidia", "conda-forge", "nodefaults"]
+platforms = ["linux-64"]
+#platforms = ["linux-aarch64"]
+
+[tool.pixi.pypi-dependencies]
+hepattn = { path = ".", editable = true }
+torch = { version = "==2.7.0", index = "https://download.pytorch.org/whl/test/cu126"}
+
+[tool.pixi.pypi-options]
+no-build-isolation = ["flash-attn"]
+extra-index-urls = ["https://download.pytorch.org/whl/test/cu126"]
+
+[tool.pixi.system-requirements]
+linux = "3.10.0"
+libc = "2.28"
+cuda = "12.2"
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+ninja = "*"
+git = "*"
+cuda = "12.3.*"
+"ruamel.yaml" = ">=0.18.10,<0.19"
+git-lfs = ">=3.6.1,<4"
+
+[tool.pixi.tasks.test]
+cmd = "pytest -xsv"
+
+[tool.pixi.tasks.test-ci]
+cmd = "pytest -xsv -m 'not gpu and not requiresdata'"
+
+[tool.ruff]
+src = ["src"]
+target-version = "py312"
+line-length = 150
+preview = true
+lint.select = ["ALL"]
+lint.ignore = ["G", "D", "DOC", "ANN", "PLW", "FBT", "EM", "PLR1714", "PLR2004", "PT018", "RET504", "COM812", "ISC001", "CPY001", "TRY003", "S101", "A003", "N812", "PLR0913", "PLR0917", "DOC201", "INP001", "PLR6301", "T201", "TD002", "TD003", "FIX002", "ARG002", "C901", "PLR0914", "PLR0912", "PLR0915", "PT011", "PLR6104", "PLR6104", "ERA001", "PGH004", "PLC0206", "S311", "SIM102", "PLR0911", "S404", "S603"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:.*distutils Version classes are deprecated. Use packaging.version instead.*:DeprecationWarning",
+]
+markers = [
+    "gpu: mark test to run on GPU",
+    "requiresdata: mark test that requires data not present in the repository",
+]

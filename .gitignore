@@ -1,0 +1,5 @@
+hepattn/logs/
+tmp/
+
+*.h5
+*.sif
