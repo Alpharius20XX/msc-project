@@ -111,30 +111,24 @@ class PredictionWriter(Callback):
         # sample/item/layer/task/value, e.g.
         # sample_id/preds/final/track_regression/track_phi
         for layer_name, layer_items in items.items():
-            # Only write items fow the specified layers
+            # Only write items for the specified layers
             if layer_name not in self.write_layers:
                 continue
             layer_group = items_group.create_group(layer_name)
-            for layer_item_name, layer_item_value in layer_items.items():
-
-
-                task_group = layer_group.create_group(layer_item_name)
-
-                # If the item is just a tensor, save it
-
-                if isinstance(layer_item_value, Tensor):
-
-
-                    self.create_dataset(task_group, layer_item_name, layer_item_value[idx][None, ...])
-
-                # If the item is a dict, save each of the items in the dict
-                elif isinstance(layer_item_value, dict):
-
-
-                    for k, v in layer_item_value.items():
-
-
-                        self.create_dataset(task_group, k, v[idx][None, ...])
+            for task_name, task_items in layer_items.items():
+                task_group = layer_group.create_group(task_name)
+                for name, value in task_items.items():
+                    # --- START FIX ---
+                    # Check if the tensor 'value' is a scalar (0-dimensional)
+                    if value.dim() == 0:
+                        # It's a scalar (like batch loss), so don't index it.
+                        # This value is the same for all samples in the batch.
+                        self.create_dataset(task_group, name, value[None, ...])
+                    else:
+                        # It's a multi-dimensional tensor (like predictions),
+                        # so we can safely index it to get the specific sample.
+                        self.create_dataset(task_group, name, value[idx][None, ...])
+                    # --- END FIX ---
 
     def create_dataset(self, group, name, value):
         # Shouldn't need to detach as we are testing

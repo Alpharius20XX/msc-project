@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=12G
-#SBATCH --output=test_output_%j.out
+#SBATCH --output=/maxcopy/hepattn/src/hepattn/experiments/tide/slurm_logs/slurm-%j.%x.out
 
 
 

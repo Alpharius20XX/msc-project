@@ -240,29 +240,6 @@ data:
 
     sudo_sct: []
 
-    reco_pix: []
-
-
-
-
-
-
-    reco_sct: []
-
-
-
-
-
-    sisp_pix: []
-
-
-
-
-
-    sisp_sct: []
-
-
-
 # Training stuff here
 trainer:
   max_epochs: 10
@@ -292,9 +269,9 @@ trainer:
     - class_path: hepattn.callbacks.PredictionWriter
       init_args:
         write_inputs: false
-        write_outputs: true #false
+        write_outputs: false
         write_preds: true
-        write_targets: true  #false
+        write_targets: false
         write_losses: false
     - class_path: lightning.pytorch.callbacks.ModelSummary
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
@@ -372,9 +349,10 @@ model:
                     input_size: 81
                     output_size: *dim
                 posenc:
-                  class_path: hepattn.models.posenc.RopeEncoderSep #RopeEncoder4D #hepattn.models.posenc.PositionEncoder #
+                  class_path: hepattn.models.posenc.FourierPositionEncoder #hepattn.models.posenc.PositionEncoder #
                   init_args:
                     input_name: pix
+                    dim: *dim
                     fields:
                       #- x #
                       #- y #
@@ -425,13 +403,14 @@ model:
                     input_size: 25
                     output_size: *dim
                 posenc:
-                  class_path: hepattn.models.posenc.RopeEncoderSep #RopeEncoder4D #hepattn.models.posenc.PositionEncoder #hepattn.models.posenc.FourierPositionEncoder #remember different inputs for rope
+                  class_path: hepattn.models.posenc.FourierPositionEncoder #hepattn.models.posenc.PositionEncoder #hepattn.models.posenc.FourierPositionEncoder #
                   init_args:
                     input_name: sct
+                    dim: *dim
                     fields:
-                      #- x 
-                      #- y 
-                      #- z 
+                      #- x #
+                      #- y #
+                      #- z #
                       - r
                       - dtheta
                       - dphi

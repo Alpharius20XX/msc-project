@@ -1,0 +1,23 @@
+# test_config.yaml
+# Inherit from the original training configuration
+- defaults:
+  - TIDE_32trk_F32_20250709-T170659/config.yaml
+  - override /trainer/callbacks: default.yaml
+
+# Override the PredictionWriter settings for testing
+trainer:
+  callbacks:
+    - class_path: hepattn.callbacks.SaveConfig
+    - class_path: hepattn.callbacks.Checkpoint
+      init_args:
+        monitor: train/loss
+        every_n_train_steps: 1000
+        mode: min
+    - class_path: hepattn.callbacks.PredictionWriter
+      init_args:
+        write_preds: true
+        write_outputs: true   # Enable saving model outputs
+        write_targets: true   # Enable saving ground truth targets
+    - class_path: lightning.pytorch.callbacks.ModelSummary
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+    - class_path: lightning.pytorch.callbacks.TQDMProgressBar

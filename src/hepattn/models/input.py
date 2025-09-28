@@ -2,6 +2,12 @@ from torch import Tensor, nn
 
 from hepattn.utils.tensor_utils import concat_tensors, get_module_dtype, get_torch_dtype
 
+from hepattn.models.posenc import RopeEncoder
+
+from hepattn.models.posenc import RopeEncoderSep
+
+from hepattn.models.posenc import RopeEncoder4D
+
 
 class InputNet(nn.Module):
     def __init__(self, input_name: str, net: nn.Module, fields: list[str], posenc: nn.Module | None = None, input_dtype: str | None = None):
@@ -61,10 +67,20 @@ class InputNet(nn.Module):
 
         x = self.net(concat_tensors([inputs[f"{self.input_name}_{field}"] for field in self.fields]))
 
-        # Perform an optional positional encoding using the positonal encoding fields
-        if self.posenc is not None:
+
+
+        if  isinstance(self.posenc,RopeEncoder) or isinstance(self.posenc,RopeEncoderSep) or isinstance(self.posenc,RopeEncoder4D):
+            x=self.posenc(inputs,x)
+
+            
+
+        elif self.posenc is not None:# Perform an optional positional encoding using the positonal encoding fields
             x += self.posenc(inputs)
 
+
+
+
+            
         # If a specific dtype was specified, make sure we cast back to the
         # dtype the rest of the model is using
         if self.input_dtype != self.output_dtype:

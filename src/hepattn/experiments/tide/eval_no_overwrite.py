@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,8 +6,9 @@ from scipy.optimize import linear_sum_assignment
 from scipy.stats import binned_statistic
 from tqdm import tqdm
 import os
+from datetime import datetime # Import the datetime module
 
-plt.rcParams["text.usetex"] = False #True
+plt.rcParams["text.usetex"] = False
 plt.rcParams["figure.dpi"] = 300
 plt.rcParams["font.size"] = 10
 plt.rcParams["figure.constrained_layout.use"] = True
@@ -19,14 +19,21 @@ def sigmoid(x):
 
 
 def main():
-
-    output_dir = "/home/xucabeeh/maxcopy/plots"
-    os.makedirs(output_dir, exist_ok=True)
-
-    #eval_path = Path("/home/xucabeeh/maxcopy/hepattn/logs/TIDE_32trk_F32_20250902-T181954/ckpts/epoch=002-train_loss=6.77032_test_eval.h5")
-
+    # --- MODIFICATION START ---
+    # 1. Create a unique timestamp
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     
-    eval_path= Path("/home/xucabeeh/maxcopy/hepattn/logs/posencwcartesiantoo/ckpts/epoch=006-train_loss=4.86178_test_eval.h5")
+    # 2. Create a unique output directory for this specific run
+    base_output_dir = "/home/xucabeeh/maxcopy/plots"
+    run_output_dir = os.path.join(base_output_dir, timestamp)
+    os.makedirs(run_output_dir, exist_ok=True)
+    # --- MODIFICATION END ---
+    
+    #eval_path = Path("/home/xucabeeh/maxcopy/hepattn/logs/posencwcartesiantoo/ckpts/epoch=006-train_loss=4.86178_test_eval.h5")
+
+    #eval_path = Path("/home/xucabeeh/maxcopy/hepattn/logs/rope_sep_just_ang/ckpts/epoch=008-train_loss=6.16020_test_eval.h5")
+
+    eval_path= Path("/home/xucabeeh/maxcopy/hepattn/logs/seperate_field_rope/ckpts/epoch=006-train_loss=4.80430_test_eval.h5")
 
     pred_names = ["sudo", "sisp", "reco", "pred"]
     colors = {
@@ -83,8 +90,7 @@ def main():
                 eps = 1e-6
                 metric = "iou"
                 score_threshold = 0.75
-
-                # Using the masks we calculate the desired score - the eps term prevents any division by zero
+                
                 if metric == "tmp":
                     scores = (2 * pix_tp + sct_tp) / (2 * (pix_tp + pix_fp) + sct_tp + sct_fp + eps)
                 elif metric == "iou":
@@ -116,25 +122,27 @@ def main():
         fig.set_size_inches(8, 3)
 
         for pred_name in pred_names:
-            freq_e = trk_eff_bins[pred_name][qty_name] / trk_all_bins[pred_name][qty_name]
+            # Added a check to prevent division by zero for safety
+            with np.errstate(divide='ignore', invalid='ignore'):
+                freq_e = trk_eff_bins[pred_name][qty_name] / trk_all_bins[pred_name][qty_name]
+                freq_e = np.nan_to_num(freq_e) # Convert potential NaN to 0
 
             for bin_idx in range(len(bins) - 1):
                 px = np.array([bins[bin_idx], bins[bin_idx + 1]])
                 py = np.array([freq_e[bin_idx], freq_e[bin_idx]])
-                # pe = np.array([freq_e_err[bin_idx], freq_e_err[bin_idx]])
                 ax.plot(px, py, color=colors[pred_name], linewidth=1.0)
-                # ax[0,qty_idx].fill_between(px, py - pe, py + pe, color=colors[pred], alpha=0.1, ec="none")
-
+                
         ax.set_xscale(scale)
-
         ax.grid(zorder=0, alpha=0.25, linestyle="--")
-        ax.grid(zorder=0, alpha=0.25, linestyle="--")
-
         ax.set_xlabel(qty_label)
         ax.set_ylabel("Track Efficiency")
 
         fig.tight_layout()
-        fig.savefig(f"{output_dir}/{qty_name}.png")
+        
+        # --- MODIFICATION START ---
+        # 3. Save the figure in the unique run directory
+        fig.savefig(f"{run_output_dir}/{qty_name}.png")
+        # --- MODIFICATION END ---
 
 
 if __name__ == "__main__":

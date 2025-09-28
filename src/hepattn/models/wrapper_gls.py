@@ -5,12 +5,8 @@ from lightning import LightningModule
 from lion_pytorch import Lion
 from torch import nn
 from torch.optim import AdamW
-from torchjd import mtl_backward
-from torchjd.aggregation import UPGrad
 
-#from sophia import SophiaG
-
-#from adan_pytorch import Adan
+# Note: Removed torchjd imports as they are no longer needed for GLS
 
 
 class ModelWrapper(LightningModule):
@@ -20,7 +16,7 @@ class ModelWrapper(LightningModule):
         model: nn.Module,
         lrs_config: dict,
         optimizer: Literal["AdamW", "Lion"] = "AdamW",
-        mtl: bool = False,
+        mtl: bool = True,
     ):
         super().__init__()
 
@@ -30,50 +26,57 @@ class ModelWrapper(LightningModule):
         self.model = model
         self.optimizer = optimizer
         self.lrs_config = lrs_config
+        # The 'mtl' flag now controls whether to use GLS for loss combination
         self.mtl = mtl
 
-        # If we are doing multi-task-learning, optimisation step must be done manually
-        if mtl:
-            self.automatic_optimization = False
+        # Automatic optimization is now always enabled, simplifying the training loop
+        # self.automatic_optimization = False # <- This is no longer needed
 
     def forward(self, inputs):
         return self.model(inputs)
 
     def predict(self, outputs):
         return self.model.predict(outputs)
-    """
-    ##changing for loss combo strategies
+
     def log_losses(self, losses, stage):
-        total_loss = 0
+        """
+        Logs individual losses and computes the total loss.
+        
+        If self.mtl is True, it combines losses using the Geometric Loss Strategy (GLS),
+        which is the geometric mean of all individual losses. This is numerically
+        more stable when implemented as `exp(mean(log(losses)))`.
+        
+        If self.mtl is False, it simply sums the individual losses.
+        """
+        individual_losses = []
 
-        # Log the losses from each task from each layer
-        for layer_name, layer_losses in losses.items():
-            layer_loss = 1
-            for task_name, task_losses in layer_losses.items():
-                for loss_name, loss_value in task_losses.items():
-                    self.log(f"{stage}/{layer_name}_{task_name}_{loss_name}", loss_value, sync_dist=True)
-                    layer_loss = layer_loss*loss_value
-            total_loss +=layer_loss
-
-        # Log the total loss
-        self.log(f"{stage}/loss", total_loss, sync_dist=True)
-        return total_loss
-    ##
-    """
-    def log_losses(self, losses, stage):
-        total_loss = 0
-
-        # Log the losses from each task from each layer
+        # Log the losses from each task and layer, and collect them
         for layer_name, layer_losses in losses.items():
             for task_name, task_losses in layer_losses.items():
                 for loss_name, loss_value in task_losses.items():
                     self.log(f"{stage}/{layer_name}_{task_name}_{loss_name}", loss_value, sync_dist=True)
-                    total_loss+=loss_value
+                    # Use non-zero losses for the calculation to avoid log(0)
+                    if loss_value > 0:
+                        individual_losses.append(loss_value)
 
-        # Log the total loss
+        # If there are no positive losses, return a zero tensor
+        if not individual_losses:
+            total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+            self.log(f"{stage}/loss", total_loss, sync_dist=True)
+            return total_loss
+
+        # Combine losses using GLS if mtl is enabled
+        if self.mtl:
+            # log-sum-exp trick for numerical stability
+            log_loss_values = [torch.log(l) for l in individual_losses]
+            total_loss = torch.exp(torch.mean(torch.stack(log_loss_values)))
+        else:
+            # Default behavior: simple summation
+            total_loss = sum(individual_losses)
+
+        # Log the final combined loss
         self.log(f"{stage}/loss", total_loss, sync_dist=True)
         return total_loss
-    
 
     def log_task_metrics(self, preds, targets, stage):
         # Log any task specific metrics
@@ -103,20 +106,17 @@ class ModelWrapper(LightningModule):
         # Get the model outputs
         outputs = self.model(inputs)
 
-        # Compute and log losses
+        # Compute and log losses. log_losses now handles GLS.
         losses = self.model.loss(outputs, targets)
         total_loss = self.log_losses(losses, "train")
 
-        # Get the predictions from the model
+        # Get the predictions from the model for logging metrics
         if batch_idx % self.trainer.log_every_n_steps == 0:  # avoid calling predict if possible
             preds = self.predict(outputs)
             self.log_metrics(preds, targets, "train")
 
-        # Use Jacobian Descent for Multi Task Learning https://arxiv.org/abs/2406.16232
-        if self.mtl:
-            self.mlt_opt(losses, outputs)
-            return None
-
+        # The manual optimization step is no longer needed.
+        # We simply return the calculated GLS loss for Lightning to handle.
         return total_loss
 
     def validation_step(self, batch):
@@ -127,7 +127,7 @@ class ModelWrapper(LightningModule):
 
         # Compute and log losses
         losses = self.model.loss(outputs, targets)
-        total_loss = self.log_losses(losses, "val")
+        total_loss = self.log_losses(losses, "val") # log_losses will use GLS if mtl=True
 
         # Get the predictions from the model
         preds = self.model.predict(outputs)
@@ -148,7 +148,7 @@ class ModelWrapper(LightningModule):
         return outputs, preds, losses
 
     def on_train_start(self):
-        # Manually overwride the learning rate in case we are starting
+        # Manually override the learning rate in case we are starting
         # from a checkpoint that had a LRS and now we want a flat LR
         if self.lrs_config.get("skip_scheduler"):
             for optimizer in self.trainer.optimizers:
@@ -161,21 +161,10 @@ class ModelWrapper(LightningModule):
         elif self.optimizer.lower() == "lion":
             optimizer = Lion
         else:
-            raise ValueError(f"Unknown optimizer: {self.opt_config['opt']}")
+            raise ValueError(f"Unknown optimizer: {self.optimizer}")
 
         opt = optimizer(self.model.parameters(), lr=self.lrs_config["initial"], weight_decay=self.lrs_config["weight_decay"])
 
-        #opt = Adan(self.model.parameters(), lr=self.lrs_config["initial"], weight_decay=self.lrs_config["weight_decay"])
-
-        ##hardcoded sophia test
-        """opt = SophiaG(
-            self.model.parameters(),
-            lr=self.lrs_config["initial"],
-            weight_decay=self.lrs_config["weight_decay"],
-            betas=(0.965, 0.99), 
-            rho=0.04,            
-        )"""
-        ##
         if not self.lrs_config.get("skip_scheduler"):
             # Configure the learning rate scheduler
             sch = torch.optim.lr_scheduler.OneCycleLR(
@@ -188,26 +177,10 @@ class ModelWrapper(LightningModule):
             )
             sch = {"scheduler": sch, "interval": "step"}
             return [opt], [sch]
+            
         print("Skipping learning rate scheduler.")
         return opt
 
-    def mlt_opt(self, losses, outputs):
-        opt = self.optimizers()
-        opt.zero_grad()
-
-        for layer_name, layer_losses in losses.items():
-            # Get a list of the features that are used by all of the tasks
-            layer_feature_names = set()
-            for task in self.model.tasks:
-                layer_feature_names.update(task.inputs)
-
-            # Remove any duplicate features that are used by multiple tasks
-            layer_features = [outputs[layer_name][feature_name] for feature_name in layer_feature_names]
-
-            # Perform the backward pass for this layer
-            # For each layer we sum the losses from each task, so we get one loss per task
-            layer_losses = [sum(losses[layer_name][task.name].values()) for task in self.model.tasks]
-
-            mtl_backward(losses=layer_losses, features=layer_features, aggregator=UPGrad())
-
-        opt.step()
+    # The mlt_opt method is no longer required with GLS and automatic optimization
+    # def mlt_opt(self, losses, outputs):
+    #     ...
